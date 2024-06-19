@@ -21,7 +21,7 @@ public class CalculatorService {
     public String calculate(String expression) {
         String[] lines = expression.split("\\n");
         for (String line : lines) {
-            if (line.matches("^\\s*[a-zA-Z]\\s*=\\s*[a-zA-Z0-9.()+\\-\\u2013*/^ ]+;?$")) {
+            if (line.matches("^\\s*[a-zA-Z]\\s*=\\s*[a-zA-Z0-9.()+\\-–*/^ 0-9a-fA-Fxbo]+;?$")) {
                 String[] parts = line.split("=");
                 String varName = parts[0].trim();
                 String varValue = parts[1].trim();
@@ -31,7 +31,7 @@ public class CalculatorService {
                 if (variables.containsKey(varName)) {
                     return evaluateExpression(variables.get(varName));
                 }
-            } else if (line.matches("^[a-zA-Z0-9.()+\\-\\u2013*/^ ]+=$")) {
+            } else if (line.matches("^[a-zA-Z0-9.()+\\-–*/^ 0-9a-fA-Fxbo]+=$")) {
                 return evaluateExpression(line.substring(0, line.length() - 1));
             }
         }
@@ -50,24 +50,28 @@ public class CalculatorService {
                     String b = stack.pop();
                     String a = stack.pop();
 
-                    if (!b.matches("-?\\d+(\\.\\d+)?") || !a.matches("-?\\d+(\\.\\d+)?")) {
+                    if (!b.matches("-?(0x[0-9a-fA-F]+|0b[01]+|0o[0-7]+|\\d+(\\.\\d+)?)")
+                            || !a.matches("-?(0x[0-9a-fA-F]+|0b[01]+|0o[0-7]+|\\d+(\\.\\d+)?)")) {
                         stack.push("(" + a + i + b + ")");
                     } else {
+                        double numB = parseNumber(b);
+                        double numA = parseNumber(a);
+
                         switch (i) {
                             case "+":
-                                stack.push(String.valueOf(Double.parseDouble(a) + Double.parseDouble(b)));
+                                stack.push(String.valueOf(numA + numB));
                                 break;
                             case "-", "–":
-                                stack.push(String.valueOf(Double.parseDouble(a) - Double.parseDouble(b)));
+                                stack.push(String.valueOf(numA - numB));
                                 break;
                             case "*":
-                                stack.push(String.valueOf(Double.parseDouble(a) * Double.parseDouble(b)));
+                                stack.push(String.valueOf(numA * numB));
                                 break;
                             case "/":
-                                stack.push(String.valueOf(Double.parseDouble(a) / Double.parseDouble(b)));
+                                stack.push(String.valueOf(numA / numB));
                                 break;
                             case "^":
-                                stack.push(String.valueOf(Math.pow(Double.parseDouble(a), Double.parseDouble(b))));
+                                stack.push(String.valueOf(Math.pow(numA, numB)));
                                 break;
                         }
                     }
@@ -79,6 +83,18 @@ public class CalculatorService {
             return stack.pop();
         } catch (IllegalArgumentException e) {
             return e.getMessage();
+        }
+    }
+
+    private double parseNumber(String number) {
+        if (number.startsWith("0x")) {
+            return Integer.parseInt(number.substring(2), 16);
+        } else if (number.startsWith("0b")) {
+            return Integer.parseInt(number.substring(2), 2);
+        } else if (number.startsWith("0o")) {
+            return Integer.parseInt(number.substring(2), 8);
+        } else {
+            return Double.parseDouble(number);
         }
     }
 
@@ -99,7 +115,19 @@ public class CalculatorService {
                 fixedToken = fixedToken.substring(0, fixedToken.length() - 1);
             }
 
-            if (fixedToken.matches("^-?\\d+$") || fixedToken.matches("^-?\\d*\\.\\d+$")) {
+            if (fixedToken.matches("^\\s*-?\\d+(\\.\\d+)?[a-zA-Z]\\s*$")) {
+                output.offer(fixedToken.substring(0, fixedToken.length() - 1));
+
+                while (!operators.isEmpty() && precedence.getOrDefault(operators.peek(), 0) >= precedence.get("*")) {
+                    output.offer(operators.pop());
+                }
+
+                operators.push("*");
+                String letter = fixedToken.substring(fixedToken.length() - 1);
+                output.offer(variables.containsKey(letter) ? evaluateExpression(variables.get(letter)) : letter);
+                lastTokenWasOperator = false;
+            } else if (fixedToken.matches("^-?\\d+$") || fixedToken.matches("^-?\\d*\\.\\d+$") ||
+                    fixedToken.matches("0x[0-9a-fA-F]+") || fixedToken.matches("0b[01]+") || fixedToken.matches("0o[0-7]+")) {
                 output.offer(fixedToken);
                 lastTokenWasOperator = false;
             } else if (fixedToken.matches("^[a-zA-Z]$")) {
@@ -112,6 +140,7 @@ public class CalculatorService {
                 while (!operators.isEmpty() && !operators.peek().equals("(")) {
                     output.offer(operators.pop());
                 }
+
                 operators.pop();
                 lastTokenWasOperator = false;
             } else if (precedence.containsKey(fixedToken)) {
@@ -119,9 +148,11 @@ public class CalculatorService {
                     output.offer("-1");
                     fixedToken = "*";
                 }
+
                 while (!operators.isEmpty() && precedence.getOrDefault(operators.peek(), 0) >= precedence.get(fixedToken)) {
                     output.offer(operators.pop());
                 }
+
                 operators.push(fixedToken);
                 lastTokenWasOperator = true;
             }

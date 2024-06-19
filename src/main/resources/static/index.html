@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Text Calculator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror/lib/codemirror.css">
+</head>
+<body>
+<h1>Text Calculator</h1>
+<textarea id="expression" name="expression"></textarea>
+<button onclick="calculate()">Calculate</button>
+<pre id="result"></pre>
+<script src="https://cdn.jsdelivr.net/npm/codemirror/lib/codemirror.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror/mode/javascript/javascript.js"></script>
+<script>
+    const editor = CodeMirror.fromTextArea(document.getElementById("expression"), {
+        lineNumbers: true,
+        mode: "javascript"
+    });
+
+    function calculate() {
+        const expression = editor.getValue().trim();
+        fetch('/api/calculate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/plain'
+            },
+            body:expression
+        })
+        .then(response => response.text())
+        .then(result => document.getElementById('result').innerText = result)
+        .catch(error => console.error('Error:', error));
+    }
+</script>
+</body>
+</html>
